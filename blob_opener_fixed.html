@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BLOB Opener</title>
+<style>
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #111827;
+  font-family: Arial, sans-serif;
+}
+.container {
+  width: min(520px, 90vw);
+  padding: 24px;
+  background: #1f2937;
+  border-radius: 14px;
+  box-shadow: 0 12px 40px rgba(0,0,0,.35);
+}
+input {
+  width: 100%;
+  padding: 13px 14px;
+  margin-bottom: 12px;
+  border: 1px solid #4b5563;
+  border-radius: 8px;
+  outline: none;
+  background: #111827;
+  color: #fff;
+  font-size: 15px;
+}
+input:focus { border-color: #3b82f6; }
+button {
+  width: 100%;
+  padding: 13px;
+  border: 0;
+  border-radius: 8px;
+  background: #2563eb;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+button:hover { background: #1d4ed8; }
+#error {
+  min-height: 18px;
+  margin-top: 10px;
+  color: #f87171;
+  text-align: center;
+  font-size: 13px;
+}
+</style>
+</head>
+
+<body>
+<div class="container">
+  <input id="urlInput" type="text" placeholder="https://example.com" autocomplete="off">
+  <button id="openButton">Open BLOB</button>
+  <div id="error"></div>
+</div>
+
+<script>
+const input = document.getElementById("urlInput");
+const button = document.getElementById("openButton");
+const error = document.getElementById("error");
+
+function getURL(value) {
+  value = value.trim();
+
+  if (!value) {
+    throw new Error("Enter a website.");
+  }
+
+  if (!/^https?:\\/\\//i.test(value)) {
+    value = "https://" + value;
+  }
+
+  const url = new URL(value);
+
+  if (!["http:", "https:"].includes(url.protocol)) {
+    throw new Error("Only HTTP and HTTPS URLs are supported.");
+  }
+
+  return url.href;
+}
+
+function openBlob() {
+  error.textContent = "";
+
+  try {
+    const target = getURL(input.value);
+
+    /*
+      The blob document itself contains the custom embed.
+      Using a regular iframe here avoids the previous sandbox
+      restriction that could prevent websites from functioning.
+    */
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Embedded Site</title>
+<style>
+html, body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: #000;
+}
+iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+}
+</style>
+</head>
+<body>
+<iframe src="${target.replace(/"/g, "&quot;")}" allow="fullscreen; autoplay; clipboard-read; clipboard-write"></iframe>
+</body>
+</html>`;
+
+    const blob = new Blob([html], { type: "text/html" });
+    const blobURL = URL.createObjectURL(blob);
+
+    // This call happens directly inside the button click,
+    // so popup blockers are much less likely to reject it.
+    const newTab = window.open(blobURL, "_blank");
+
+    if (!newTab) {
+      error.textContent = "Your browser blocked the new tab. Allow pop-ups for this page.";
+      return;
+    }
+
+    // Do NOT immediately revoke the URL. Keep it alive while the tab loads.
+    setTimeout(() => {
+      URL.revokeObjectURL(blobURL);
+    }, 10 * 60 * 1000);
+
+  } catch (e) {
+    error.textContent = e.message || "Something went wrong.";
+  }
+}
+
+button.addEventListener("click", openBlob);
+
+input.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    openBlob();
+  }
+});
+</script>
+</body>
+</html>
